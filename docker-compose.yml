@@ -1,0 +1,202 @@
+# =====================================================================
+# docker-compose.yml — à placer à la RACINE de ton projet
+# (au même niveau que les dossiers user-service, produit-service, etc.)
+#
+# Lance TOUTE la stack SEN-PRIX en une seule commande :
+#   docker-compose up --build
+#
+# Arrête tout :
+#   docker-compose down
+#
+# Arrête tout ET supprime les données des bases (repart de zéro) :
+#   docker-compose down -v
+# =====================================================================
+
+version: "3.9"
+
+services:
+
+  # -------------------- BASE DE DONNÉES POSTGRESQL --------------------
+  # Un seul conteneur PostgreSQL qui héberge les 7 bases (via le script
+  # init-db.sql exécuté automatiquement au premier démarrage).
+  postgres:
+    image: postgres:15-alpine
+    container_name: senprix-postgres
+    environment:
+      POSTGRES_USER: senprix
+      POSTGRES_PASSWORD: senprix
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U senprix"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # -------------------- KEYCLOAK (authentification) --------------------
+  # Le realm "senprix" (rôles ADMIN/AGENT_COLLECTE/CONSOMMATEUR + clients
+  # senprix-admin-client / senprix-app) est importé automatiquement au
+  # démarrage depuis keycloak-import/realm-export.json — plus besoin de
+  # reconfigurer Keycloak à la main.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6.2
+    container_name: senprix-keycloak
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: senprix
+      KC_DB_PASSWORD: senprix
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak-import:/opt/keycloak/data/import
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # -------------------- MICROSERVICES SEN-PRIX --------------------
+
+  user-service:
+    build: ./user-service
+    container_name: senprix-user-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/user_db
+      KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
+      KEYCLOAK_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_CLIENT_SECRET: 0HBq0IKhizVhOyNieLRG2UMtlDHmVIGC
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+
+  produit-service:
+    build: ./produit-service
+    container_name: senprix-produit-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/produit_db
+      KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  campagne-service:
+    build: ./campagne-service
+    container_name: senprix-campagne-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/campagne_db
+      KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
+      USER_SERVICE_URL: http://user-service:8081
+      PRODUIT_SERVICE_URL: http://produit-service:8082
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      produit-service:
+        condition: service_started
+
+  prix-service:
+    build: ./prix-service
+    container_name: senprix-prix-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/prix_db
+      KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
+      NOTIF_SERVICE_URL: http://notif-service:8086
+      CAMPAGNE_SERVICE_URL: http://campagne-service:8083
+      PRODUIT_SERVICE_URL: http://produit-service:8082
+      ALERTE_SERVICE_URL: http://alerte-service:8085
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  alerte-service:
+    build: ./alerte-service
+    container_name: senprix-alerte-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/alerte_db
+      KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
+      NOTIF_SERVICE_URL: http://notif-service:8086
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notif-service:
+    build: ./notif-service
+    container_name: senprix-notif-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/notif_db
+      KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
+    ports:
+      - "8086:8086"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  rapport-service:
+    build: ./rapport-service
+    container_name: senprix-rapport-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/rapport_db
+      KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
+      PRIX_SERVICE_URL: http://prix-service:8084
+      PRODUIT_SERVICE_URL: http://produit-service:8082
+    ports:
+      - "8087:8087"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  export-service:
+    build: ./export-service
+    container_name: senprix-export-service
+    environment:
+      KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
+      PRIX_SERVICE_URL: http://prix-service:8084
+      PRODUIT_SERVICE_URL: http://produit-service:8082
+    ports:
+      - "8088:8088"
+    # Pas de dépendance à postgres : export-service est stateless (sans base de données)
+
+  gateway-service:
+    build: ./gateway-service
+    container_name: senprix-gateway-service
+    environment:
+      USER_SERVICE_URL: http://user-service:8081
+      PRODUIT_SERVICE_URL: http://produit-service:8082
+      CAMPAGNE_SERVICE_URL: http://campagne-service:8083
+      PRIX_SERVICE_URL: http://prix-service:8084
+      ALERTE_SERVICE_URL: http://alerte-service:8085
+      NOTIF_SERVICE_URL: http://notif-service:8086
+      RAPPORT_SERVICE_URL: http://rapport-service:8087
+      EXPORT_SERVICE_URL: http://export-service:8088
+    ports:
+      - "8090:8090"
+    depends_on:
+      - user-service
+      - produit-service
+      - campagne-service
+      - prix-service
+      - alerte-service
+      - notif-service
+      - rapport-service
+      - export-service
+
+volumes:
+  postgres_data:

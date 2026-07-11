@@ -1,0 +1,29 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:campagne_test_db;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: false
+
+  liquibase:
+    enabled: false   # Hibernate crée le schéma directement pour accélérer les tests
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:8080/realms/senprix/protocol/openid-connect/certs
+
+services:
+  produit-service-url: http://localhost:8082
+  user-service-url: http://localhost:8081
+
+logging:
+  level:
+    sn.dci.senprix.campagne: DEBUG

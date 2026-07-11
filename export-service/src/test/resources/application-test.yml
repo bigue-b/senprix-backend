@@ -1,0 +1,14 @@
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:8080/realms/senprix/protocol/openid-connect/certs
+
+services:
+  prix-service-url: http://localhost:8084
+  produit-service-url: http://localhost:8082
+
+logging:
+  level:
+    sn.dci.senprix.export: DEBUG

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="002-create-campagne-agent-table" author="senprix">
+        <createTable tableName="campagne_agent">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="campagne_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <!-- agent_id référence un utilisateur du user-service : aucune
+                 contrainte de clé étrangère SQL possible entre microservices,
+                 la validation d'existence se fait par appel HTTP synchrone -->
+            <column name="agent_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_affectation" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="campagne_agent"
+                baseColumnNames="campagne_id"
+                constraintName="fk_campagne_agent_campagne"
+                referencedTableName="campagne"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <addUniqueConstraint
+                tableName="campagne_agent"
+                columnNames="campagne_id, agent_id"
+                constraintName="uk_campagne_agent_unique"/>
+
+        <createIndex indexName="idx_campagne_agent_agent" tableName="campagne_agent">
+            <column name="agent_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

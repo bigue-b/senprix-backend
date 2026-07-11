@@ -1,0 +1,87 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: GATEWAY-SERVICE
+
+  cloud:
+    gateway:
+      # CORS global : autorise le frontend (quel que soit son origine
+      # en développement) à appeler la gateway directement depuis le
+      # navigateur, sans configurer CORS séparément dans chaque service.
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+
+      routes:
+        # ===================== USER-SERVICE (8081) =====================
+        - id: user-service
+          uri: ${USER_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/admin/utilisateurs/**,/api/public/utilisateurs/**,/api/agent/moi
+
+        # ===================== PRODUIT-SERVICE (8082) =====================
+        - id: produit-service
+          uri: ${PRODUIT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/admin/produits/**,/api/public/produits/**,/api/admin/marches/**,/api/public/marches/**
+
+        # ===================== CAMPAGNE-SERVICE (8083) =====================
+        - id: campagne-service
+          uri: ${CAMPAGNE_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/admin/campagnes/**,/api/public/campagnes/**
+
+        # ===================== PRIX-SERVICE (8084) =====================
+        - id: prix-service
+          uri: ${PRIX_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/agent/prix/**,/api/public/prix/**,/api/admin/prix/**,/api/admin/audit/**
+
+        # ===================== ALERTE-SERVICE (8085) =====================
+        - id: alerte-service
+          uri: ${ALERTE_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/admin/alertes/**,/api/public/alertes/**,/api/internal/alertes/**
+
+        # ===================== NOTIF-SERVICE (8086) =====================
+        - id: notif-service
+          uri: ${NOTIF_SERVICE_URL:http://localhost:8086}
+          predicates:
+            - Path=/api/admin/notifications/**,/api/citoyen/abonnements/**
+
+        # ===================== RAPPORT-SERVICE (8087) =====================
+        - id: rapport-service
+          uri: ${RAPPORT_SERVICE_URL:http://localhost:8087}
+          predicates:
+            - Path=/api/admin/rapports/**,/api/public/rapports/**
+
+        # ===================== EXPORT-SERVICE (8088) =====================
+        - id: export-service
+          uri: ${EXPORT_SERVICE_URL:http://localhost:8088}
+          predicates:
+            - Path=/api/admin/exports/**,/api/public/exports/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, gateway
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    sn.dci.senprix.gateway: INFO
+    org.springframework.cloud.gateway: INFO

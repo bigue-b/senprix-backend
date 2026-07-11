@@ -1,0 +1,53 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: PRODUIT-SERVICE
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/produit_db}
+    username: ${DB_USER:senprix}
+    password: ${DB_PASSWORD:senprix}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate   # Le schéma est géré par Liquibase, pas par Hibernate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        # Le dialecte est auto-détecté par Spring Boot depuis l'URL JDBC
+        # (jdbc:postgresql://...) — ne pas le forcer explicitement ici,
+        # cela évite des conflits avec le profil "test" qui utilise H2.
+
+  liquibase:
+    change-log: classpath:/db/changelog/changelog-master.xml
+    enabled: true
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWK_URI:http://localhost:8080/realms/senprix/protocol/openid-connect/certs}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    sn.dci.senprix.produit: INFO
+    org.hibernate.SQL: WARN

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="002-create-agent-collecte-table" author="senprix">
+        <createTable tableName="agent_collecte">
+            <!-- L'id n'est PAS auto-généré : il reprend exactement celui
+                 de l'utilisateur parent (stratégie d'héritage 1-1 partagée) -->
+            <column name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="matricule" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_agent_matricule"/>
+            </column>
+            <column name="zone_affectation" type="VARCHAR(200)"/>
+            <column name="nbre_releves" type="INTEGER" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="agent_collecte"
+                baseColumnNames="id"
+                constraintName="fk_agent_collecte_utilisateur"
+                referencedTableName="utilisateur"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <createIndex indexName="idx_agent_zone" tableName="agent_collecte">
+            <column name="zone_affectation"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,55 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: RAPPORT-SERVICE
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/rapport_db}
+    username: ${DB_USER:senprix}
+    password: ${DB_PASSWORD:senprix}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate   # Le schéma est géré par Liquibase, pas par Hibernate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  liquibase:
+    change-log: classpath:/db/changelog/changelog-master.xml
+    enabled: true
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWK_URI:http://localhost:8080/realms/senprix/protocol/openid-connect/certs}
+
+# URLs des microservices distants appelés pour la génération des rapports.
+services:
+  prix-service-url: ${PRIX_SERVICE_URL:http://localhost:8084}
+  produit-service-url: ${PRODUIT_SERVICE_URL:http://localhost:8082}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    sn.dci.senprix.rapport: INFO
+    org.hibernate.SQL: WARN

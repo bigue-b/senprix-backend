@@ -1,0 +1,61 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: ALERTE-SERVICE
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/alerte_db}
+    username: ${DB_USER:senprix}
+    password: ${DB_PASSWORD:senprix}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  liquibase:
+    change-log: classpath:/db/changelog/changelog-master.xml
+    enabled: true
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWK_URI:http://localhost:8080/realms/senprix/protocol/openid-connect/certs}
+
+# Seuils d'alerte configurables
+senprix:
+  alertes:
+    seuil-moyenne: ${SEUIL_MOYENNE:100}
+    seuil-eleve: ${SEUIL_ELEVE:200}
+
+# URL du notif-service et adresse email recevant les alertes.
+services:
+  notif-service-url: ${NOTIF_SERVICE_URL:http://localhost:8086}
+  admin-notification-email: ${ADMIN_NOTIFICATION_EMAIL:admin.test@dci.sn}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    sn.dci.senprix.alerte: INFO
+    org.hibernate.SQL: WARN

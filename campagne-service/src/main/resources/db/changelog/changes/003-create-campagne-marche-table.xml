@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="003-create-campagne-marche-table" author="senprix">
+        <createTable tableName="campagne_marche">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="campagne_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <!-- marche_id référence un marché du produit-service : aucune
+                 contrainte de clé étrangère SQL possible entre microservices,
+                 la validation d'existence se fait par appel HTTP synchrone -->
+            <column name="marche_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_association" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="campagne_marche"
+                baseColumnNames="campagne_id"
+                constraintName="fk_campagne_marche_campagne"
+                referencedTableName="campagne"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <addUniqueConstraint
+                tableName="campagne_marche"
+                columnNames="campagne_id, marche_id"
+                constraintName="uk_campagne_marche_unique"/>
+
+        <createIndex indexName="idx_campagne_marche_marche" tableName="campagne_marche">
+            <column name="marche_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

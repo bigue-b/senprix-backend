@@ -1,0 +1,68 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: NOTIF-SERVICE
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/notif_db}
+    username: ${DB_USER:senprix}
+    password: ${DB_PASSWORD:senprix}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate   # Le schéma est géré par Liquibase, pas par Hibernate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  liquibase:
+    change-log: classpath:/db/changelog/changelog-master.xml
+    enabled: true
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWK_URI:http://localhost:8080/realms/senprix/protocol/openid-connect/certs}
+
+  # Configuration SMTP — à adapter avec les identifiants Mailtrap
+  # (ou tout autre fournisseur SMTP) pour les tests en conditions réelles.
+  mail:
+    host: ${SMTP_HOST:sandbox.smtp.mailtrap.io}
+    port: ${SMTP_PORT:2525}
+    username: ${SMTP_USERNAME:621b92998c9d26}
+    password: ${SMTP_PASSWORD:25dac129e79077}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+notification:
+  email:
+    expediteur: ${NOTIF_EMAIL_EXPEDITEUR:no-reply@senprix.sn}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    sn.dci.senprix.notif: INFO
+    org.hibernate.SQL: WARN

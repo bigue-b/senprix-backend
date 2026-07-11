@@ -1,0 +1,21 @@
+// ============================================================
+// À AJOUTER dans le fichier existant GlobalExceptionHandler.java,
+// juste après la méthode gererNotificationNotFound(), et AVANT
+// la méthode gererValidation() :
+// ============================================================
+
+    @ExceptionHandler(AbonnementNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> gererAbonnementNotFound(
+            AbonnementNotFoundException ex, HttpServletRequest request) {
+        return construireReponse(HttpStatus.NOT_FOUND, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(AbonnementDejaExistantException.class)
+    public ResponseEntity<ApiErrorResponse> gererAbonnementDejaExistant(
+            AbonnementDejaExistantException ex, HttpServletRequest request) {
+        return construireReponse(HttpStatus.CONFLICT, ex.getMessage(), request, null);
+    }
+
+// ============================================================
+// FIN DE L'AJOUT
+// ============================================================

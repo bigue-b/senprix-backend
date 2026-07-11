@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="001-create-notification-table" author="senprix">
+        <createTable tableName="notification">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="destinataire_email" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="canal" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sujet" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="contenu" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="statut" type="VARCHAR(20)" defaultValue="EN_ATTENTE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message_erreur" type="TEXT"/>
+            <column name="date_creation" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_envoi" type="TIMESTAMP"/>
+        </createTable>
+
+        <createIndex indexName="idx_notification_statut" tableName="notification">
+            <column name="statut"/>
+        </createIndex>
+
+        <createIndex indexName="idx_notification_destinataire" tableName="notification">
+            <column name="destinataire_email"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

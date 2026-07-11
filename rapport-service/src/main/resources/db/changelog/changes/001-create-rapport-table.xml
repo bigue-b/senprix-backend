@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="001-create-rapport-table" author="senprix">
+        <createTable tableName="rapport">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="titre" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- produit_id et marche_id référencent des entités du
+                 produit-service : aucune contrainte de clé étrangère SQL
+                 possible, les noms réels sont copiés au moment de la
+                 génération (produit_nom, marche_nom) pour conserver une
+                 trace lisible même si le produit/marché est modifié
+                 ou supprimé plus tard côté produit-service -->
+            <column name="produit_id" type="BIGINT"/>
+            <column name="produit_nom" type="VARCHAR(200)"/>
+            <column name="marche_id" type="BIGINT"/>
+            <column name="marche_nom" type="VARCHAR(200)"/>
+            <column name="campagne_id" type="BIGINT"/>
+            <column name="periode_debut" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="periode_fin" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="prix_moyen" type="DECIMAL(12,2)"/>
+            <column name="prix_min" type="DECIMAL(12,2)"/>
+            <column name="prix_max" type="DECIMAL(12,2)"/>
+            <column name="nombre_releves" type="BIGINT"/>
+            <column name="contenu_detaille_json" type="TEXT"/>
+            <column name="date_generation" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex indexName="idx_rapport_type" tableName="rapport">
+            <column name="type"/>
+        </createIndex>
+
+        <createIndex indexName="idx_rapport_produit_marche" tableName="rapport">
+            <column name="produit_id"/>
+            <column name="marche_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

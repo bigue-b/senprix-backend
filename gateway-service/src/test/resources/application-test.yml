@@ -1,0 +1,19 @@
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: test-service
+          uri: http://localhost:${wiremock.server.port:9999}
+          predicates:
+            - Path=/api/public/test/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, gateway
+
+logging:
+  level:
+    sn.dci.senprix.gateway: DEBUG
+    org.springframework.cloud.gateway: DEBUG

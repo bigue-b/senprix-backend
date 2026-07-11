@@ -1,0 +1,21 @@
+﻿# Compilation Maven (généré, pas besoin de le versionner)
+**/target/
+*.class
+
+# Fichiers IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Logs
+*.log
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# Variables d'environnement sensibles
+.env
