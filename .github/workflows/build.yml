@@ -1,0 +1,52 @@
+name: CI - Build SEN-PRIX Backend
+
+# Se déclenche à chaque push ou pull request sur la branche main
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+
+    # Matrice : le job se répète automatiquement pour chacun des 9
+    # microservices, en parallèle, sans dupliquer la configuration.
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - user-service
+          - produit-service
+          - campagne-service
+          - prix-service
+          - alerte-service
+          - notif-service
+          - rapport-service
+          - export-service
+          - gateway-service
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+          cache-dependency-path: ${{ matrix.service }}/pom.xml
+
+      - name: Compiler ${{ matrix.service }}
+        working-directory: ${{ matrix.service }}
+        run: mvn clean package -DskipTests -B
+
+      - name: Publier le .jar généré
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.service }}-jar
+          path: ${{ matrix.service }}/target/*.jar
+          retention-days: 5
