@@ -60,6 +60,26 @@ services:
       postgres:
         condition: service_healthy
 
+  # -------------------- RABBITMQ (messagerie asynchrone) --------------------
+  # Utilisé par prix-service pour publier les prix suspects (exchange
+  # "prix.suspect.exchange") et par alerte-service pour les consommer
+  # (queue "alerte.queue") via @RabbitListener. Interface de gestion
+  # accessible sur http://localhost:15672 (identifiants guest/guest).
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: senprix-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   # -------------------- MICROSERVICES SEN-PRIX --------------------
 
   user-service:
@@ -118,10 +138,16 @@ services:
       CAMPAGNE_SERVICE_URL: http://campagne-service:8083
       PRODUIT_SERVICE_URL: http://produit-service:8082
       ALERTE_SERVICE_URL: http://alerte-service:8085
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
     ports:
       - "8084:8084"
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   alerte-service:
@@ -131,10 +157,16 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/alerte_db
       KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
       NOTIF_SERVICE_URL: http://notif-service:8086
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
     ports:
       - "8085:8085"
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   notif-service:

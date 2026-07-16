@@ -29,6 +29,12 @@ spring:
         jwt:
           jwk-set-uri: ${KEYCLOAK_JWK_URI:http://localhost:8080/realms/senprix/protocol/openid-connect/certs}
 
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
 # URLs des microservices distants appelés pour la validation croisée
 # des relevés de prix (produit et campagne/agent).
 services:

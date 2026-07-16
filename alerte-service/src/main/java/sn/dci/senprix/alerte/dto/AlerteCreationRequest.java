@@ -9,8 +9,8 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 /**
- * DTO reçu sur l'endpoint interne /api/internal/alertes, envoyé par
- * le prix-service au moment où il détecte un relevé de prix suspect.
+ * DTO désérialisé depuis le message RabbitMQ publié par prix-service
+ * (queue "alerte.queue") au moment où il détecte un relevé de prix suspect.
  * Le niveau de gravité est calculé par le alerte-service lui-même à
  * partir de l'écart pourcentage, pas fourni directement par l'appelant.
  */

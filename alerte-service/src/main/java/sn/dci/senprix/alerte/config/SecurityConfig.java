@@ -19,10 +19,7 @@ import java.util.stream.Collectors;
 
 /**
  * Configure le alerte-service comme un OAuth2 Resource Server.
- * - /api/internal/** : accès libre, réservé en pratique aux appels
- *   internes du prix-service (endpoint technique, pas de notion de
- *   compte de service complexe pour rester cohérent avec les choix
- *   déjà faits sur les autres microservices)
+ * - /api/public/**   : accès libre
  * - /api/admin/**    : réservé au rôle ADMIN
  * Les rôles Keycloak (realm_access.roles) sont extraits et convertis
  * en autorités Spring Security préfixées par ROLE_.
@@ -40,7 +37,6 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                     .requestMatchers("/actuator/health").permitAll()
                     .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                    .requestMatchers("/api/internal/**").permitAll()
                     .requestMatchers("/api/public/**").permitAll()
                     .anyRequest().authenticated()
             )

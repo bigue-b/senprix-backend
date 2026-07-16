@@ -2,11 +2,9 @@ package sn.dci.senprix.alerte.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import sn.dci.senprix.alerte.dto.AlerteCreationRequest;
 import sn.dci.senprix.alerte.dto.AlerteResponse;
 import sn.dci.senprix.alerte.dto.ResolutionRequest;
 import sn.dci.senprix.alerte.service.AlerteService;
@@ -15,11 +13,12 @@ import java.util.List;
 
 /**
  * Expose les endpoints de gestion des alertes de prix suspects.
- * - /api/internal/alertes  : appelé exclusivement par le prix-service
- *   au moment de la détection d'un prix suspect, sans authentification
- *   (endpoint technique interne, suivant le même pattern que les
- *   endpoints publics de vérification des autres microservices)
+ * - /api/public/alertes    : consultation publique
  * - /api/admin/alertes/**  : consultation et traitement, réservé à ADMIN
+ *
+ * La création d'alerte n'est plus exposée via un endpoint REST interne :
+ * elle est déclenchée par AlerteEventListener suite à la réception d'un
+ * message RabbitMQ publié par prix-service (voir event/listener).
  */
 @RestController
 @RequiredArgsConstructor
@@ -36,14 +35,6 @@ public class AlerteController {
                 ? alerteService.listerParStatut(statut)
                 : alerteService.listerToutes();
         return ResponseEntity.ok(alertes);
-    }
-
-    // ===================== ENDPOINT INTERNE =====================
-
-    @PostMapping("/api/internal/alertes")
-    public ResponseEntity<AlerteResponse> creerAlerte(@Valid @RequestBody AlerteCreationRequest request) {
-        AlerteResponse cree = alerteService.creer(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(cree);
     }
 
     // ===================== ENDPOINTS ADMIN =====================

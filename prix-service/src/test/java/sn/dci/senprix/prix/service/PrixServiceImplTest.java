@@ -154,7 +154,7 @@ class PrixServiceImplTest {
         // Then
         assertThat(result.getStatut()).isEqualTo("SUSPECT");
         assertThat(entiteAvantSauvegarde.getStatut()).isEqualTo(StatutPrix.SUSPECT);
-        verify(prixEventPublisher, times(1)).publierPrixSuspect(eq(entiteAvantSauvegarde), eq(200.0));
+        verify(prixEventPublisher, times(1)).publierPrixSuspect(eq(entiteSauvegardee), eq(200.0));
     }
 
     @Test

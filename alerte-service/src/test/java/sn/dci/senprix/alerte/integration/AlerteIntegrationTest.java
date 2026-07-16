@@ -10,12 +10,15 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import sn.dci.senprix.alerte.dto.AlerteCreationRequest;
+import sn.dci.senprix.alerte.dto.AlerteResponse;
 import sn.dci.senprix.alerte.dto.ResolutionRequest;
+import sn.dci.senprix.alerte.service.AlerteService;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -35,20 +38,23 @@ class AlerteIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private AlerteService alerteService;
+
     private AlerteCreationRequest requestValide() {
         return new AlerteCreationRequest(
                 10L, 1L, 1L, new BigDecimal("300.00"), new BigDecimal("100.00"));
     }
 
     @Test
-    void creerAlerte_sansToken_devraitReussirCarEndpointInterne() throws Exception {
-        // L'endpoint /api/internal/alertes est volontairement sans authentification
-        mockMvc.perform(post("/api/internal/alertes")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestValide())))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.niveauGravite").value("MOYENNE"))
-                .andExpect(jsonPath("$.statut").value("NOUVELLE"));
+    void creerAlerte_devraitClasserEtInitialiserLeStatut() {
+        // La création d'alerte n'est plus exposée en REST : elle est désormais
+        // déclenchée par AlerteEventListener suite à un message RabbitMQ, mais
+        // passe par le même AlerteService.creer() que l'ancien endpoint.
+        AlerteResponse reponse = alerteService.creer(requestValide());
+
+        assertThat(reponse.getNiveauGravite()).isEqualTo("MOYENNE");
+        assertThat(reponse.getStatut()).isEqualTo("NOUVELLE");
     }
 
     @Test
@@ -79,13 +85,8 @@ class AlerteIntegrationTest {
 
     @Test
     void cycleDeVieComplet_prendreEnChargeEtResoudre_devraitReussir() throws Exception {
-        // Étape 1 : créer l'alerte (simulant un appel du prix-service)
-        String reponseCreation = mockMvc.perform(post("/api/internal/alertes")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestValide())))
-                .andReturn().getResponse().getContentAsString();
-
-        Long alerteId = objectMapper.readTree(reponseCreation).get("id").asLong();
+        // Étape 1 : créer l'alerte (simulant la réception d'un message RabbitMQ du prix-service)
+        Long alerteId = alerteService.creer(requestValide()).getId();
 
         // Étape 2 : un admin prend l'alerte en charge
         mockMvc.perform(patch("/api/admin/alertes/" + alerteId + "/prendre-en-charge")
@@ -113,12 +114,7 @@ class AlerteIntegrationTest {
 
     @Test
     void resoudre_directementDepuisNouvelle_devraitRetourner400() throws Exception {
-        String reponseCreation = mockMvc.perform(post("/api/internal/alertes")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestValide())))
-                .andReturn().getResponse().getContentAsString();
-
-        Long alerteId = objectMapper.readTree(reponseCreation).get("id").asLong();
+        Long alerteId = alerteService.creer(requestValide()).getId();
 
         ResolutionRequest resolution = new ResolutionRequest("Tentative directe");
 

@@ -5,7 +5,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import sn.dci.senprix.alerte.client.NotifServiceClient;
+import sn.dci.senprix.alerte.config.SeuilAlertesProperties;
 import sn.dci.senprix.alerte.dto.AlerteCreationRequest;
 import sn.dci.senprix.alerte.dto.AlerteResponse;
 import sn.dci.senprix.alerte.dto.ResolutionRequest;
@@ -34,6 +37,12 @@ class AlerteServiceImplTest {
 
     @Mock
     private AlerteMapper alerteMapper;
+
+    @Mock
+    private NotifServiceClient notifServiceClient;
+
+    @Spy
+    private SeuilAlertesProperties seuilProperties = new SeuilAlertesProperties();
 
     @InjectMocks
     private AlerteServiceImpl alerteService;

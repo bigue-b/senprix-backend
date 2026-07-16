@@ -22,7 +22,7 @@ public class PrixMapper {
                 .unite(request.getUnite())
                 .dateReleve(request.getDateReleve())
                 .commentaire(request.getCommentaire())
-                .statut(sn.dci.senprix.prix.enums.StatutPrix.SUSPECT)
+                .statut(sn.dci.senprix.prix.enums.StatutPrix.VALIDE)
                 .build();
     }
 
