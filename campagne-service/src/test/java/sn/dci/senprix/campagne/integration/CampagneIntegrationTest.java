@@ -81,8 +81,12 @@ class CampagneIntegrationTest {
 
     @Test
     void creerCampagne_avecRoleConsommateur_devraitRetourner403() throws Exception {
+        // Dates volontairement calculées à partir d'aujourd'hui : une date de début
+        // fixe finit dans le passé (violant @FutureOrPresent sur CampagneRequest),
+        // ce qui déclenche un 400 de validation avant même le contrôle @PreAuthorize
+        // et fait échouer l'assertion attendue sur le 403.
         CampagneRequest request = new CampagneRequest(
-                "Test", null, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31));
+                "Test", null, LocalDate.now().plusMonths(1), LocalDate.now().plusMonths(1).plusDays(30));
 
         mockMvc.perform(post("/api/admin/campagnes")
                         .contentType(MediaType.APPLICATION_JSON)

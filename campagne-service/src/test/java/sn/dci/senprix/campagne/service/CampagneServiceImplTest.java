@@ -18,6 +18,7 @@ import sn.dci.senprix.campagne.exception.CampagneNotFoundException;
 import sn.dci.senprix.campagne.mapper.CampagneMapper;
 import sn.dci.senprix.campagne.repository.CampagneAgentRepository;
 import sn.dci.senprix.campagne.repository.CampagneMarcheRepository;
+import sn.dci.senprix.campagne.repository.CampagneProduitRepository;
 import sn.dci.senprix.campagne.repository.CampagneRepository;
 import sn.dci.senprix.campagne.service.impl.CampagneServiceImpl;
 
@@ -41,6 +42,9 @@ class CampagneServiceImplTest {
 
     @Mock
     private CampagneMarcheRepository campagneMarcheRepository;
+
+    @Mock
+    private CampagneProduitRepository campagneProduitRepository;
 
     @Mock
     private CampagneMapper campagneMapper;
@@ -101,6 +105,7 @@ class CampagneServiceImplTest {
                 .thenReturn(new UtilisateurVerificationDto(true, "AGENT_COLLECTE", true));
         when(campagneAgentRepository.findByCampagneId(1L)).thenReturn(List.of());
         when(campagneMarcheRepository.findByCampagneId(1L)).thenReturn(List.of());
+        when(campagneProduitRepository.findByCampagneId(1L)).thenReturn(List.of());
         when(campagneMapper.toResponse(campagne, List.of(), List.of(), List.of()))
                 .thenReturn(CampagneResponse.builder().id(1L).build());
 
@@ -187,6 +192,7 @@ class CampagneServiceImplTest {
         when(produitServiceClient.marcheExiste(50L)).thenReturn(true);
         when(campagneAgentRepository.findByCampagneId(1L)).thenReturn(List.of());
         when(campagneMarcheRepository.findByCampagneId(1L)).thenReturn(List.of());
+        when(campagneProduitRepository.findByCampagneId(1L)).thenReturn(List.of());
         when(campagneMapper.toResponse(campagne, List.of(), List.of(), List.of()))
                 .thenReturn(CampagneResponse.builder().id(1L).build());
 
@@ -229,6 +235,7 @@ class CampagneServiceImplTest {
         when(campagneRepository.save(campagne)).thenReturn(campagne);
         when(campagneAgentRepository.findByCampagneId(1L)).thenReturn(List.of());
         when(campagneMarcheRepository.findByCampagneId(1L)).thenReturn(List.of());
+        when(campagneProduitRepository.findByCampagneId(1L)).thenReturn(List.of());
         when(campagneMapper.toResponse(campagne, List.of(), List.of(), List.of()))
                 .thenReturn(CampagneResponse.builder().id(1L).statut("EN_COURS").build());
 

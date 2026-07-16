@@ -6,10 +6,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.reactive.server.AutoConfigureWebTestClient;
+import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 import java.io.IOException;
@@ -60,11 +58,12 @@ class GatewayRoutingIntegrationTest {
         }
     }
 
-    @DynamicPropertySource
-    static void configurerRoutePointVersServeurFactice(DynamicPropertyRegistry registry) {
-        registry.add("spring.cloud.gateway.routes[0].uri",
-                () -> "http://localhost:" + portServeurFactice);
-    }
+    // La route de test (id, uri, predicates) est définie dans application-test.yml,
+    // avec l'URI paramétrée par la propriété système "wiremock.server.port" positionnée
+    // ci-dessus. Un @DynamicPropertySource qui ne fixerait que "routes[0].uri" ici
+    // écraserait toute la liste "routes" (id et predicates inclus) : Spring Boot ne
+    // fusionne pas les éléments d'une liste indexée entre sources de configuration,
+    // la source la plus prioritaire remplace la liste entière.
 
     @Test
     void requeteVersChemainConnu_devraitEtreRouteeVersLeServiceBackend() {
