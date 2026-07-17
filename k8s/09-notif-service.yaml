@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notif-service
+  namespace: senprix
+  labels:
+    app: notif-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notif-service
+  template:
+    metadata:
+      labels:
+        app: notif-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8086"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      containers:
+        - name: notif-service
+          image: senprix/notif-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8086
+          env:
+            - name: DB_URL
+              value: "jdbc:postgresql://postgres:5432/notif_db"
+            - name: KEYCLOAK_JWK_URI
+              value: "http://keycloak:8080/realms/senprix/protocol/openid-connect/certs"
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8086
+            failureThreshold: 60
+            periodSeconds: 5
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8086
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8086
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notif-service
+  namespace: senprix
+spec:
+  selector:
+    app: notif-service
+  ports:
+    - port: 8086
+      targetPort: 8086

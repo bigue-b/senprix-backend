@@ -1,0 +1,87 @@
+# =====================================================================
+# Keycloak — isolé dans son propre namespace (senprix-keycloak), comme
+# recommandé dans le document de référence. Le realm est importé au
+# démarrage depuis un ConfigMap généré à partir du fichier existant :
+#   kubectl create configmap keycloak-realm \
+#     --from-file=realm-export.json=keycloak-import/realm-export.json \
+#     -n senprix-keycloak
+# =====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: senprix-keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.6.2
+          args: ["start-dev", "--import-realm"]
+          ports:
+            - containerPort: 8080
+          env:
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: senprix-secrets
+                  key: KEYCLOAK_ADMIN
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: senprix-secrets
+                  key: KEYCLOAK_ADMIN_PASSWORD
+            - name: KC_DB
+              value: postgres
+            # Le service "postgres" vit dans le namespace senprix : on le
+            # référence via son nom DNS complet inter-namespace.
+            - name: KC_DB_URL
+              value: jdbc:postgresql://postgres.senprix.svc.cluster.local:5432/keycloak
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: senprix-secrets
+                  key: POSTGRES_USER
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: senprix-secrets
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+      volumes:
+        - name: realm-import
+          configMap:
+            name: keycloak-realm
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: senprix-keycloak
+spec:
+  selector:
+    app: keycloak
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+# Service miroir dans le namespace senprix, pour que les microservices
+# puissent joindre "keycloak:8080" sans changer leur configuration
+# existante (ExternalName pointe vers le service réel du namespace keycloak).
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: senprix
+spec:
+  type: ExternalName
+  externalName: keycloak.senprix-keycloak.svc.cluster.local

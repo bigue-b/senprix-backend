@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway-service
+  namespace: senprix
+  labels:
+    app: gateway-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway-service
+  template:
+    metadata:
+      labels:
+        app: gateway-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8090"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      containers:
+        - name: gateway-service
+          image: senprix/gateway-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8090
+          env:
+            - name: USER_SERVICE_URL
+              value: "http://user-service:8081"
+            - name: PRODUIT_SERVICE_URL
+              value: "http://produit-service:8082"
+            - name: CAMPAGNE_SERVICE_URL
+              value: "http://campagne-service:8083"
+            - name: PRIX_SERVICE_URL
+              value: "http://prix-service:8084"
+            - name: ALERTE_SERVICE_URL
+              value: "http://alerte-service:8085"
+            - name: NOTIF_SERVICE_URL
+              value: "http://notif-service:8086"
+            - name: RAPPORT_SERVICE_URL
+              value: "http://rapport-service:8087"
+            - name: EXPORT_SERVICE_URL
+              value: "http://export-service:8088"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8090
+            failureThreshold: 60
+            periodSeconds: 5
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8090
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8090
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-service
+  namespace: senprix
+spec:
+  selector:
+    app: gateway-service
+  ports:
+    - port: 8090
+      targetPort: 8090

@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rapport-service
+  namespace: senprix
+  labels:
+    app: rapport-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rapport-service
+  template:
+    metadata:
+      labels:
+        app: rapport-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8087"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      containers:
+        - name: rapport-service
+          image: senprix/rapport-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8087
+          env:
+            - name: DB_URL
+              value: "jdbc:postgresql://postgres:5432/rapport_db"
+            - name: KEYCLOAK_JWK_URI
+              value: "http://keycloak:8080/realms/senprix/protocol/openid-connect/certs"
+            - name: PRIX_SERVICE_URL
+              value: "http://prix-service:8084"
+            - name: PRODUIT_SERVICE_URL
+              value: "http://produit-service:8082"
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8087
+            failureThreshold: 60
+            periodSeconds: 5
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8087
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8087
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rapport-service
+  namespace: senprix
+spec:
+  selector:
+    app: rapport-service
+  ports:
+    - port: 8087
+      targetPort: 8087

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: senprix
+  labels:
+    app: senprix
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: senprix-keycloak
+  labels:
+    app: senprix-keycloak
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: senprix-monitoring
+  labels:
+    app: senprix-monitoring

@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alerte-service
+  namespace: senprix
+  labels:
+    app: alerte-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alerte-service
+  template:
+    metadata:
+      labels:
+        app: alerte-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8085"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      containers:
+        - name: alerte-service
+          image: senprix/alerte-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8085
+          env:
+            - name: DB_URL
+              value: "jdbc:postgresql://postgres:5432/alerte_db"
+            - name: KEYCLOAK_JWK_URI
+              value: "http://keycloak:8080/realms/senprix/protocol/openid-connect/certs"
+            - name: NOTIF_SERVICE_URL
+              value: "http://notif-service:8086"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USER
+              value: "guest"
+            - name: RABBITMQ_PASSWORD
+              value: "guest"
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8085
+            failureThreshold: 60
+            periodSeconds: 5
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8085
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8085
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alerte-service
+  namespace: senprix
+spec:
+  selector:
+    app: alerte-service
+  ports:
+    - port: 8085
+      targetPort: 8085

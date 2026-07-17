@@ -1,0 +1,52 @@
+# =====================================================================
+# Ingress — équivalent local de l'AWS Application Load Balancer (ALB).
+# Nécessite le contrôleur NGINX Ingress installé sur le cluster :
+#   minikube addons enable ingress
+# ou (kind) :
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+#
+# Seule la Gateway est exposée : les 9 microservices restent internes
+# au cluster, exactement comme dans l'architecture de déploiement
+# docker-compose déjà validée au chapitre 4.
+# =====================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: senprix-ingress
+  namespace: senprix
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: senprix.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 8090
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak-ingress
+  namespace: senprix-keycloak
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: keycloak.senprix.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080

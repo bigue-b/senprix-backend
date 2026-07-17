@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: produit-service
+  namespace: senprix
+  labels:
+    app: produit-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: produit-service
+  template:
+    metadata:
+      labels:
+        app: produit-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8082"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      containers:
+        - name: produit-service
+          image: senprix/produit-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+          env:
+            - name: DB_URL
+              value: "jdbc:postgresql://postgres:5432/produit_db"
+            - name: KEYCLOAK_JWK_URI
+              value: "http://keycloak:8080/realms/senprix/protocol/openid-connect/certs"
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            failureThreshold: 60
+            periodSeconds: 5
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: produit-service
+  namespace: senprix
+spec:
+  selector:
+    app: produit-service
+  ports:
+    - port: 8082
+      targetPort: 8082

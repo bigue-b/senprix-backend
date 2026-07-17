@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: export-service
+  namespace: senprix
+  labels:
+    app: export-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: export-service
+  template:
+    metadata:
+      labels:
+        app: export-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8088"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      containers:
+        - name: export-service
+          image: senprix/export-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8088
+          env:
+            - name: KEYCLOAK_JWK_URI
+              value: "http://keycloak:8080/realms/senprix/protocol/openid-connect/certs"
+            - name: PRIX_SERVICE_URL
+              value: "http://prix-service:8084"
+            - name: PRODUIT_SERVICE_URL
+              value: "http://produit-service:8082"
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8088
+            failureThreshold: 60
+            periodSeconds: 5
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8088
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8088
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: export-service
+  namespace: senprix
+spec:
+  selector:
+    app: export-service
+  ports:
+    - port: 8088
+      targetPort: 8088
