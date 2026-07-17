@@ -19,4 +19,4 @@ WORKDIR /app
 # Le nom du jar correspond à <artifactId>-<version>.jar (ex: prix-service-1.0.0.jar)
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-XX:TieredStopAtLevel=1", "-jar", "app.jar"]
