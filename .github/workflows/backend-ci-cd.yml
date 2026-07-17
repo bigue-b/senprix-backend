@@ -1,14 +1,13 @@
 # =====================================================================
 # Pipeline CI/CD — build, tests, qualité, image Docker, déploiement K8s
-# À placer dans le dépôt à : .github/workflows/backend-ci-cd.yml
 #
-# Prérequis à configurer dans GitHub (Settings > Secrets and variables > Actions) :
-#   - SONAR_TOKEN            (compte SonarCloud gratuit pour projets publics)
-#   - DOCKERHUB_USERNAME     (ou registre de conteneurs de ton choix)
+# Secrets configurés dans GitHub (Settings > Secrets and variables > Actions) :
+#   - SONAR_TOKEN            (SonarCloud, organisation "senprix")
+#   - DOCKERHUB_USERNAME     (ndeyebigue)
 #   - DOCKERHUB_TOKEN
-#   - KUBE_CONFIG            (kubeconfig encodé en base64 de ton cluster local,
-#                             utile seulement si le pipeline doit déployer lui-
-#                             même ; sinon cette étape peut rester manuelle)
+#   - KUBE_CONFIG            (pas encore configuré : le job "deploy"
+#                             échouera tant que ce secret n'existe pas,
+#                             c'est attendu pour l'instant)
 # =====================================================================
 name: Backend CI/CD — SEN-PRIX
 
@@ -62,8 +61,11 @@ jobs:
         working-directory: ${{ matrix.service }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: mvn -B sonar:sonar -Dsonar.projectKey=senprix-${{ matrix.service }}
-        continue-on-error: true # ne bloque pas le pipeline tant que le projet SonarCloud n'est pas configuré
+        run: >
+          mvn -B sonar:sonar
+          -Dsonar.projectKey=senprix
+          -Dsonar.organization=senprix
+          -Dsonar.host.url=https://sonarcloud.io
 
       - name: Connexion au registre de conteneurs
         if: github.ref == 'refs/heads/main'
