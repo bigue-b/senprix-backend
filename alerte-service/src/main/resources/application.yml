@@ -41,9 +41,11 @@ senprix:
     seuil-moyenne: ${SEUIL_MOYENNE:100}
     seuil-eleve: ${SEUIL_ELEVE:200}
 
-# URL du notif-service et adresse email recevant les alertes.
+# Notif-service et adresse email recevant les alertes. L'hôte est le NOM
+# du service dans l'annuaire Eureka, pas une adresse : le RestClient
+# @LoadBalanced le résout à chaud vers une instance disponible.
 services:
-  notif-service-url: ${NOTIF_SERVICE_URL:http://localhost:8086}
+  notif-service-url: ${NOTIF_SERVICE_URL:http://NOTIF-SERVICE}
   admin-notification-email: ${ADMIN_NOTIFICATION_EMAIL:admin.test@dci.sn}
 
 springdoc:
@@ -51,6 +53,21 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
+
+# Enregistrement auprès de l'annuaire de services (discovery-service).
+# Le service s'y déclare sous son spring.application.name, ce qui permet
+# à la gateway de le router dynamiquement via lb://ALERTE-SERVICE.
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    # Enregistre l'adresse IP plutôt que le nom d'hôte : indispensable en
+    # conteneur (Docker / Kubernetes), où le hostname interne n'est pas
+    # résolvable depuis les autres services.
+    prefer-ip-address: true
 
 management:
   endpoints:

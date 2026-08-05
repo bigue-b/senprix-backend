@@ -29,11 +29,11 @@ minikube start --cpus=4 --memory=8192
 minikube addons enable ingress
 ```
 
-## 2. Construire les images Docker de tes 9 microservices
+## 2. Construire les images Docker de tes 10 microservices
 
 ```bash
 cd /chemin/vers/senprix-backend
-for svc in user-service produit-service campagne-service prix-service \
+for svc in discovery-service user-service produit-service campagne-service prix-service \
            alerte-service notif-service rapport-service export-service gateway-service; do
   docker build -t senprix/$svc:latest ./$svc
 done
@@ -42,6 +42,38 @@ done
 minikube image load senprix/user-service:latest
 # ... répéter pour chaque service, ou utiliser :
 eval $(minikube docker-env)  # puis relancer les docker build ci-dessus
+```
+
+### Docker Desktop : importer les images dans containerd (indispensable)
+
+Sur **Docker Desktop**, Kubernetes tourne sur `containerd`, qui possède
+son propre magasin d'images : `docker build` alimente le démon Docker,
+**pas** le nœud Kubernetes. Comme les manifests utilisent le tag
+`latest` avec `imagePullPolicy: IfNotPresent`, containerd continue de
+servir la version qu'il a déjà en cache — on redéploie alors sans s'en
+rendre compte une image périmée (symptôme typique : le code modifié ne
+prend pas effet, ici les services ne s'enregistraient pas dans Eureka).
+
+Après chaque `docker build`, importer explicitement l'image :
+
+```bash
+for svc in discovery-service user-service produit-service campagne-service prix-service \
+           alerte-service notif-service rapport-service export-service gateway-service; do
+  docker save senprix/$svc:latest | \
+    docker exec -i desktop-control-plane ctr -n k8s.io images import -
+done
+
+# Puis forcer le remplacement des pods (le tag n'ayant pas changé)
+kubectl rollout restart deployment -n senprix
+```
+
+Pour vérifier qu'un pod tourne bien sur l'image attendue, comparer les
+digests :
+
+```bash
+kubectl get pod -n senprix -l app=prix-service \
+  -o jsonpath='{.items[0].status.containerStatuses[0].imageID}'
+docker images --no-trunc --format "{{.Repository}}:{{.Tag}} {{.ID}}" | grep prix-service
 ```
 
 ## 3. Créer les secrets et ConfigMaps qui ne sont PAS dans les fichiers YAML
@@ -66,6 +98,9 @@ kubectl create configmap keycloak-realm \
 kubectl apply -f 01-secrets.yaml
 kubectl apply -f 02-postgres.yaml
 kubectl apply -f 03-keycloak.yaml
+# L'annuaire Eureka en premier : les microservices s'y enregistrent au
+# démarrage et la gateway l'interroge pour résoudre ses routes lb://.
+kubectl apply -f 03b-discovery-service.yaml
 kubectl apply -f 04-user-service.yaml
 kubectl apply -f 05-produit-service.yaml
 kubectl apply -f 06-campagne-service.yaml
@@ -80,6 +115,12 @@ kubectl apply -f 13-ingress.yaml
 # Vérifier que tout démarre correctement
 kubectl get pods -n senprix
 kubectl get pods -n senprix-keycloak
+
+# Vérifier que les 10 services sont bien enregistrés dans l'annuaire :
+# ouvrir le tableau de bord Eureka depuis le poste de travail
+kubectl port-forward -n senprix svc/discovery-service 8761:8761
+# puis http://localhost:8761 — la liste doit contenir les 9 services
+# métier + GATEWAY-SERVICE, tous en statut UP.
 ```
 
 ## 5. Déployer le monitoring

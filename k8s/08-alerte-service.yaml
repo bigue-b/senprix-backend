@@ -6,6 +6,12 @@ metadata:
   labels:
     app: alerte-service
 spec:
+  # 1 réplique en fonctionnement courant (voir 07-prix-service.yaml).
+  # Pour une démonstration ponctuelle de répartition de charge :
+  #   kubectl scale deployment/alerte-service -n senprix --replicas=2
+  # Les deux pods s'enregistrent alors sous le même nom ALERTE-SERVICE
+  # avec des instanceId distincts et se partagent le trafic via Spring
+  # Cloud LoadBalancer.
   replicas: 1
   selector:
     matchLabels:
@@ -30,8 +36,6 @@ spec:
               value: "jdbc:postgresql://postgres:5432/alerte_db"
             - name: KEYCLOAK_JWK_URI
               value: "http://keycloak:8080/realms/senprix/protocol/openid-connect/certs"
-            - name: NOTIF_SERVICE_URL
-              value: "http://notif-service:8086"
             - name: RABBITMQ_HOST
               value: "rabbitmq"
             - name: RABBITMQ_PORT
@@ -40,11 +44,15 @@ spec:
               value: "guest"
             - name: RABBITMQ_PASSWORD
               value: "guest"
+            # Adresse de l'annuaire Eureka : le service s'y enregistre au
+            # démarrage pour être routable par la gateway via lb://NOM-SERVICE.
+            - name: EUREKA_SERVER_URL
+              value: "http://discovery-service:8761/eureka/"
           startupProbe:
             httpGet:
               path: /actuator/health
               port: 8085
-            failureThreshold: 60
+            failureThreshold: 150
             periodSeconds: 5
             timeoutSeconds: 5
           readinessProbe:
@@ -67,7 +75,7 @@ spec:
               cpu: "100m"
             limits:
               memory: "512Mi"
-              cpu: "500m"
+              cpu: "2000m"
 ---
 apiVersion: v1
 kind: Service

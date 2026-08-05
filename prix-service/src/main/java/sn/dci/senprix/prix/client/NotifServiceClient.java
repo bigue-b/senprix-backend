@@ -20,7 +20,9 @@ public class NotifServiceClient {
 
     private final RestClient restClient;
 
-    @Value("${notif.service.url:http://localhost:8086}")
+    // Nom du service dans l'annuaire Eureka, pas une adresse : le
+    // RestClient @LoadBalanced le résout à chaud vers une instance.
+    @Value("${notif.service.url:http://NOTIF-SERVICE}")
     private String notifServiceUrl;
 
     public void envoyerNotificationValidation(String emailAgent, String produit, String marche, String montant) {

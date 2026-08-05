@@ -80,7 +80,30 @@ services:
       timeout: 5s
       retries: 10
 
+  # -------------------- DISCOVERY-SERVICE (annuaire Eureka) --------------------
+  # Annuaire de services dynamique : chaque microservice s'y enregistre au
+  # démarrage sous son spring.application.name, et la gateway l'interroge
+  # pour router les requêtes via lb://NOM-SERVICE sans URL codée en dur.
+  # Tableau de bord : http://localhost:8761
+  discovery-service:
+    build: ./discovery-service
+    container_name: senprix-discovery-service
+    environment:
+      EUREKA_INSTANCE_HOSTNAME: discovery-service
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
   # -------------------- MICROSERVICES SEN-PRIX --------------------
+  # Tous pointent vers l'annuaire via EUREKA_SERVER_URL. La dépendance à
+  # discovery-service est volontairement "service_started" et non
+  # "service_healthy" : le client Eureka retente son enregistrement
+  # périodiquement, un service peut donc démarrer avant l'annuaire.
 
   user-service:
     build: ./user-service
@@ -90,12 +113,15 @@ services:
       KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
       KEYCLOAK_SERVER_URL: http://keycloak:8080
       KEYCLOAK_ADMIN_CLIENT_SECRET: 0HBq0IKhizVhOyNieLRG2UMtlDHmVIGC
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka/
     ports:
       - "8081:8081"
     depends_on:
       postgres:
         condition: service_healthy
       keycloak:
+        condition: service_started
+      discovery-service:
         condition: service_started
 
   produit-service:
@@ -104,11 +130,14 @@ services:
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/produit_db
       KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka/
     ports:
       - "8082:8082"
     depends_on:
       postgres:
         condition: service_healthy
+      discovery-service:
+        condition: service_started
 
   campagne-service:
     build: ./campagne-service
@@ -116,8 +145,10 @@ services:
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/campagne_db
       KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
-      USER_SERVICE_URL: http://user-service:8081
-      PRODUIT_SERVICE_URL: http://produit-service:8082
+      # Plus de *_SERVICE_URL ici : les cibles sont des noms de service
+      # résolus via Eureka. Les redéfinir écraserait le nom par une
+      # adresse fixe et court-circuiterait la répartition de charge.
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka/
     ports:
       - "8083:8083"
     depends_on:
@@ -127,6 +158,8 @@ services:
         condition: service_started
       produit-service:
         condition: service_started
+      discovery-service:
+        condition: service_started
 
   prix-service:
     build: ./prix-service
@@ -134,14 +167,14 @@ services:
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/prix_db
       KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
-      NOTIF_SERVICE_URL: http://notif-service:8086
-      CAMPAGNE_SERVICE_URL: http://campagne-service:8083
-      PRODUIT_SERVICE_URL: http://produit-service:8082
-      ALERTE_SERVICE_URL: http://alerte-service:8085
+      # Plus de *_SERVICE_URL ici : les cibles sont des noms de service
+      # résolus via Eureka. Les redéfinir écraserait le nom par une
+      # adresse fixe et court-circuiterait la répartition de charge.
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
       RABBITMQ_PASSWORD: guest
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka/
     ports:
       - "8084:8084"
     depends_on:
@@ -149,6 +182,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      discovery-service:
+        condition: service_started
 
   alerte-service:
     build: ./alerte-service
@@ -156,11 +191,14 @@ services:
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/alerte_db
       KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
-      NOTIF_SERVICE_URL: http://notif-service:8086
+      # Plus de NOTIF_SERVICE_URL ici : la cible est un nom de service
+      # résolu via Eureka. Le redéfinir écraserait le nom par une adresse
+      # fixe et court-circuiterait la répartition de charge.
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
       RABBITMQ_PASSWORD: guest
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka/
     ports:
       - "8085:8085"
     depends_on:
@@ -168,6 +206,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      discovery-service:
+        condition: service_started
 
   notif-service:
     build: ./notif-service
@@ -175,11 +215,14 @@ services:
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/notif_db
       KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka/
     ports:
       - "8086:8086"
     depends_on:
       postgres:
         condition: service_healthy
+      discovery-service:
+        condition: service_started
 
   rapport-service:
     build: ./rapport-service
@@ -187,40 +230,47 @@ services:
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/rapport_db
       KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
-      PRIX_SERVICE_URL: http://prix-service:8084
-      PRODUIT_SERVICE_URL: http://produit-service:8082
+      # Plus de *_SERVICE_URL ici : les cibles sont des noms de service
+      # résolus via Eureka. Les redéfinir écraserait le nom par une
+      # adresse fixe et court-circuiterait la répartition de charge.
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka/
     ports:
       - "8087:8087"
     depends_on:
       postgres:
         condition: service_healthy
+      discovery-service:
+        condition: service_started
 
   export-service:
     build: ./export-service
     container_name: senprix-export-service
     environment:
       KEYCLOAK_JWK_URI: http://keycloak:8080/realms/senprix/protocol/openid-connect/certs
-      PRIX_SERVICE_URL: http://prix-service:8084
-      PRODUIT_SERVICE_URL: http://produit-service:8082
+      # Plus de *_SERVICE_URL ici : les cibles sont des noms de service
+      # résolus via Eureka. Les redéfinir écraserait le nom par une
+      # adresse fixe et court-circuiterait la répartition de charge.
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka/
     ports:
       - "8088:8088"
     # Pas de dépendance à postgres : export-service est stateless (sans base de données)
+    depends_on:
+      discovery-service:
+        condition: service_started
 
   gateway-service:
     build: ./gateway-service
     container_name: senprix-gateway-service
+    # Plus aucune URL de microservice ici : la gateway route via
+    # lb://NOM-SERVICE et résout les adresses à chaud depuis l'annuaire
+    # Eureka. Ajouter une instance ou changer un port ne nécessite plus
+    # de modifier cette configuration.
     environment:
-      USER_SERVICE_URL: http://user-service:8081
-      PRODUIT_SERVICE_URL: http://produit-service:8082
-      CAMPAGNE_SERVICE_URL: http://campagne-service:8083
-      PRIX_SERVICE_URL: http://prix-service:8084
-      ALERTE_SERVICE_URL: http://alerte-service:8085
-      NOTIF_SERVICE_URL: http://notif-service:8086
-      RAPPORT_SERVICE_URL: http://rapport-service:8087
-      EXPORT_SERVICE_URL: http://export-service:8088
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka/
     ports:
       - "8090:8090"
     depends_on:
+      - discovery-service
       - user-service
       - produit-service
       - campagne-service

@@ -141,3 +141,201 @@ Le flux `prix-service` → RabbitMQ (`prix.suspect.exchange` /
 `alerte.queue`) → `alerte-service` → `notif-service` fonctionne de bout
 en bout sur la stack reconstruite avec le fix JVM
 (`-XX:TieredStopAtLevel=1`). Aucune régression constatée.
+
+---
+
+# Test end-to-end : répartition de charge Eureka + Spring Cloud LoadBalancer
+
+Date : 2026-08-05
+Environnement : cluster Kubernetes local **Docker Desktop** (nœud
+`desktop-control-plane`, v1.36.1), namespace `senprix`
+
+## Contexte
+
+Après l'ajout de l'annuaire `discovery-service` (Eureka Server, port
+8761), validation du fait que la découverte de services produit bien une
+**répartition de charge réelle** entre plusieurs instances, et pas
+seulement une résolution de nom :
+
+1. `prix-service` et `alerte-service` passent à `replicas: 2`
+   (`k8s/07-prix-service.yaml`, `k8s/08-alerte-service.yaml`).
+2. Les deux pods de chaque service s'enregistrent dans Eureka sous le
+   même nom applicatif mais avec des `instanceId` et des IP distincts.
+3. La Gateway route `lb://PRIX-SERVICE` en alternant entre les deux
+   instances via Spring Cloud LoadBalancer.
+
+## 0. Vérification préalable — Spring Cloud LoadBalancer est bien actif
+
+`spring-cloud-starter-loadbalancer` n'est déclaré explicitement dans
+aucun `pom.xml` : il arrive **transitivement** via
+`spring-cloud-starter-netflix-eureka-client`. Vérifié sur les 5 services
+concernés (`mvn dependency:tree`) :
+
+```
+gateway-service    +- org.springframework.cloud:spring-cloud-starter-netflix-eureka-client:jar:4.1.3:compile
+                   |  \- org.springframework.cloud:spring-cloud-starter-loadbalancer:jar:4.1.4:compile
+prix-service       spring-cloud-starter-loadbalancer:jar:4.1.4
+rapport-service    spring-cloud-starter-loadbalancer:jar:4.1.4
+export-service     spring-cloud-starter-loadbalancer:jar:4.1.4
+campagne-service   spring-cloud-starter-loadbalancer:jar:4.1.4
+alerte-service     spring-cloud-starter-loadbalancer:jar:4.1.4
+```
+
+Il est donc actif des deux côtés :
+- **Gateway** : URIs `lb://NOM-SERVICE` dans
+  `gateway-service/src/main/resources/application.yml`.
+- **Clients REST inter-services** : bean `RestClient.Builder` annoté
+  `@LoadBalanced` dans chaque `config/RestClientConfig.java`, avec des
+  cibles de la forme `http://PRIX-SERVICE` (le nom du service remplace
+  l'hôte ; `lb://` est une syntaxe propre aux routes de la Gateway).
+
+## 1. Déploiement des 2 répliques
+
+```bash
+kubectl apply -f k8s/07-prix-service.yaml
+kubectl apply -f k8s/08-alerte-service.yaml
+kubectl get pods -n senprix
+```
+
+```
+NAME                                 READY   STATUS    RESTARTS   AGE
+alerte-service-6b5d78b89b-hnx6l      1/1     Running   0          73s
+alerte-service-6b5d78b89b-r7n78      1/1     Running   0          73s
+discovery-service-7bdd949869-npxkr   1/1     Running   0          13h
+gateway-service-5b885c8bd7-s67ks     1/1     Running   0          16m
+postgres-0                           1/1     Running   0          18d
+prix-service-c555b4c4c-6qxkv         1/1     Running   0          7m44s
+prix-service-c555b4c4c-vjk2z         1/1     Running   0          8m10s
+rabbitmq-b75567fbb-mxwnp             1/1     Running   0          10m
+```
+
+## 2. Résultat observé — double enregistrement dans Eureka
+
+```bash
+kubectl exec -n senprix deploy/discovery-service -- \
+  wget -qO- http://localhost:8761/eureka/apps
+```
+
+```xml
+name>PRIX-SERVICE
+  instanceId>prix-service-c555b4c4c-6qxkv:PRIX-SERVICE:8084   ipAddr>10.244.0.91   status>UP
+  instanceId>prix-service-c555b4c4c-vjk2z:PRIX-SERVICE:8084   ipAddr>10.244.0.90   status>UP
+name>ALERTE-SERVICE
+  instanceId>alerte-service-6b5d78b89b-r7n78:ALERTE-SERVICE:8085   ipAddr>10.244.0.93   status>UP
+  instanceId>alerte-service-6b5d78b89b-hnx6l:ALERTE-SERVICE:8085   ipAddr>10.244.0.92   status>UP
+name>GATEWAY-SERVICE
+  instanceId>gateway-service-5b885c8bd7-s67ks:GATEWAY-SERVICE:8090   ipAddr>10.244.0.85   status>UP
+```
+
+Un seul nom applicatif, deux `instanceId` et deux IP de pod distincts :
+c'est exactement ce dont Spring Cloud LoadBalancer a besoin pour
+alterner. Confirmé côté pods :
+
+```
+DiscoveryClient_PRIX-SERVICE/prix-service-c555b4c4c-6qxkv:PRIX-SERVICE:8084 - registration status: 204
+DiscoveryClient_PRIX-SERVICE/prix-service-c555b4c4c-vjk2z:PRIX-SERVICE:8084 - registration status: 204
+```
+
+## 3. Test de répartition — 30 requêtes via la Gateway
+
+Traçage des requêtes activé sans modifier le code, par variable
+d'environnement :
+
+```bash
+kubectl set env deployment/prix-service -n senprix \
+  LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB=DEBUG
+```
+
+Puis, la Gateway étant exposée localement :
+
+```bash
+kubectl port-forward -n senprix svc/gateway-service 8090:8090
+
+# Série 1 : 20 requêtes
+for i in $(seq 1 20); do curl -s -o /dev/null -w "%{http_code} " \
+  http://localhost:8090/api/public/prix; done
+# => 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200
+```
+
+Comptage par pod :
+
+```bash
+for p in $(kubectl get pods -n senprix -l app=prix-service -o name); do
+  echo "${p#pod/} : $(kubectl logs -n senprix ${p#pod/} | grep -c 'GET "/api/public/prix"')"
+done
+```
+
+## 4. Résultat observé — répartition strictement équilibrée
+
+| Série | Requêtes envoyées | pod `...-6qxkv` (10.244.0.91) | pod `...-vjk2z` (10.244.0.90) |
+|-------|-------------------|-------------------------------|-------------------------------|
+| 1     | 20                | 10                            | 10                            |
+| 1 + 2 | 30 (cumul)        | 15                            | 15                            |
+
+Extraits bruts des logs des deux pods, qui montrent l'alternance
+requête par requête (horodatages entrelacés à la milliseconde) :
+
+```
+--- prix-service-c555b4c4c-vjk2z ---
+2026-08-05T13:52:43.006Z DEBUG 1 --- [PRIX-SERVICE] [nio-8084-exec-4] o.s.web.servlet.DispatcherServlet : GET "/api/public/prix", parameters={}
+2026-08-05T13:52:43.508Z DEBUG 1 --- [PRIX-SERVICE] [nio-8084-exec-5] o.s.web.servlet.DispatcherServlet : GET "/api/public/prix", parameters={}
+
+--- prix-service-c555b4c4c-6qxkv ---
+2026-08-05T13:52:43.254Z DEBUG 1 --- [PRIX-SERVICE] [nio-8084-exec-5] o.s.web.servlet.DispatcherServlet : GET "/api/public/prix", parameters={}
+2026-08-05T13:52:43.606Z DEBUG 1 --- [PRIX-SERVICE] [nio-8084-exec-6] o.s.web.servlet.DispatcherServlet : GET "/api/public/prix", parameters={}
+```
+
+Ordre chronologique reconstitué : `vjk2z` (43.006) → `6qxkv` (43.254) →
+`vjk2z` (43.508) → `6qxkv` (43.606). L'alternance est parfaite, ce qui
+correspond à `RoundRobinLoadBalancer`, la stratégie par défaut de Spring
+Cloud LoadBalancer. Aucune requête n'est tombée (30/30 en HTTP 200) et
+aucune n'a été perdue (30 lignes de log pour 30 requêtes).
+
+## 5. Difficultés rencontrées et corrections apportées
+
+Trois obstacles ont dû être levés pour que le test aboutisse — ils sont
+documentés ici car ils se reproduiront à chaque déploiement local :
+
+**a) Les pods tournaient sur d'anciennes images.** Docker Desktop exécute
+Kubernetes sur **containerd**, qui possède son propre magasin d'images :
+un `docker build` n'alimente pas le nœud. Avec `imagePullPolicy:
+IfNotPresent`, containerd continuait de servir l'image du tag `latest`
+telle qu'il l'avait mise en cache (le JAR ne contenait aucune classe
+Eureka, d'où un registre désespérément vide). Il faut importer
+explicitement les images :
+
+```bash
+docker save senprix/prix-service:latest | \
+  docker exec -i desktop-control-plane ctr -n k8s.io images import -
+kubectl rollout restart deployment/prix-service -n senprix
+```
+
+**b) `limits.cpu: 500m` empêchait le démarrage.** Le démarrage d'une JVM
+Spring Boot est un pic CPU court mais intense. Bridé à une demi-cœur,
+l'initialisation du seul contexte web prenait déjà ~58 s et le démarrage
+complet dépassait le `startupProbe` (60 × 5 s = 5 min) : Kubernetes
+tuait le pod par SIGTERM, qui repartait en boucle (6 redémarrages
+observés). Corrigé dans les manifests : `cpu: 2000m` et
+`failureThreshold: 150`. Une fois corrigé, les deux pods démarrent en
+**52 s et 57 s, sans aucun redémarrage**.
+
+**c) Le pod RabbitMQ était en CrashLoopBackOff** (19 redémarrages) sur
+`Error when reading /var/lib/rabbitmq/.erlang.cookie: eacces`. Problème
+préexistant, sans rapport avec Eureka, mais bloquant : son manifest ne
+déclare aucun volume, le fichier de cookie corrompu survivait donc aux
+redémarrages du conteneur. Comme `spring-boot-starter-amqp` ajoute un
+indicateur `rabbit` à `/actuator/health`, les pods `prix-service`
+renvoyaient 503 sur leurs probes et ne passaient jamais `READY`. Résolu
+en recréant le pod (`kubectl scale --replicas=0` puis `1`), ce qui
+repart d'un système de fichiers neuf.
+
+## Conclusion
+
+La découverte de services ne se limite pas à la résolution de noms :
+elle assure une **répartition de charge effective**. Sur 30 requêtes
+envoyées à `lb://PRIX-SERVICE` via la Gateway, les deux instances en ont
+traité exactement 15 chacune, en alternance stricte, sans configuration
+de load balancer autre que la présence transitive de
+`spring-cloud-starter-loadbalancer`. Monter une réplique supplémentaire
+ne demande désormais qu'un changement de `replicas` — aucune URL, aucun
+port et aucun manifeste de Gateway à retoucher.

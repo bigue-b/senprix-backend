@@ -63,9 +63,12 @@ class CampagneIntegrationTest {
 
     @Test
     void creerCampagne_avecRoleAdmin_devraitRetourner201() throws Exception {
+        // Dates calculées à partir d'aujourd'hui : une date de début fixe
+        // finit par tomber dans le passé et viole @FutureOrPresent sur
+        // CampagneRequest, ce qui renvoie un 400 au lieu du 201 attendu.
         CampagneRequest request = new CampagneRequest(
                 "Collecte Tabaski 2026", "Campagne spéciale",
-                LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31));
+                LocalDate.now().plusMonths(1), LocalDate.now().plusMonths(1).plusDays(30));
 
         mockMvc.perform(post("/api/admin/campagnes")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -110,7 +113,7 @@ class CampagneIntegrationTest {
         // Given : créer une campagne d'abord
         CampagneRequest campagneRequest = new CampagneRequest(
                 "Campagne Pour Affectation", null,
-                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30));
+                LocalDate.now().plusMonths(2), LocalDate.now().plusMonths(2).plusDays(30));
 
         String reponseCreation = mockMvc.perform(post("/api/admin/campagnes")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -146,7 +149,7 @@ class CampagneIntegrationTest {
         // Given
         CampagneRequest campagneRequest = new CampagneRequest(
                 "Campagne Test Agent Invalide", null,
-                LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31));
+                LocalDate.now().plusMonths(3), LocalDate.now().plusMonths(3).plusDays(30));
 
         String reponseCreation = mockMvc.perform(post("/api/admin/campagnes")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -180,7 +183,7 @@ class CampagneIntegrationTest {
         // Given
         CampagneRequest campagneRequest = new CampagneRequest(
                 "Campagne Pour Marché", null,
-                LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 30));
+                LocalDate.now().plusMonths(4), LocalDate.now().plusMonths(4).plusDays(30));
 
         String reponseCreation = mockMvc.perform(post("/api/admin/campagnes")
                         .contentType(MediaType.APPLICATION_JSON)

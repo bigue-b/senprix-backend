@@ -35,6 +35,14 @@ spec:
       containers:
         - name: postgres
           image: postgres:15-alpine
+          # max_connections par défaut = 100. Chaque microservice ouvre un
+          # pool HikariCP (10 connexions par défaut) : entre les 9 services,
+          # les pods transitoires des rolling updates et une éventuelle
+          # montée en répliques, le plafond est atteint et les démarrages
+          # échouent sur « FATAL: sorry, too many clients already » —
+          # Liquibase n'obtient plus de connexion et le contexte Spring ne
+          # se crée pas.
+          args: ["-c", "max_connections=300"]
           ports:
             - containerPort: 5432
           envFrom:

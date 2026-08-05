@@ -15,6 +15,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "discovery-service/**"
       - "user-service/**"
       - "produit-service/**"
       - "campagne-service/**"
@@ -33,6 +34,7 @@ jobs:
     strategy:
       matrix:
         service:
+          - discovery-service
           - user-service
           - produit-service
           - campagne-service
@@ -101,7 +103,8 @@ jobs:
       - name: Redéploiement des microservices (rolling update)
         run: |
           kubectl apply -f k8s/senprix-k8s/ -n senprix
-          for svc in user-service produit-service campagne-service prix-service \
+          # discovery-service en premier : les autres s'enregistrent auprès de lui.
+          for svc in discovery-service user-service produit-service campagne-service prix-service \
                      alerte-service notif-service rapport-service export-service gateway-service; do
             kubectl set image deployment/$svc $svc=${{ secrets.DOCKERHUB_USERNAME }}/senprix-$svc:${{ github.sha }} -n senprix
             kubectl rollout status deployment/$svc -n senprix --timeout=120s

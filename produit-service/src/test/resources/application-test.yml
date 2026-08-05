@@ -23,3 +23,12 @@ spring:
 logging:
   level:
     sn.dci.senprix.produit: DEBUG
+
+# Aucun annuaire Eureka ne tourne pendant les tests automatisés :
+# le client est désactivé pour éviter les tentatives d'enregistrement
+# et les temporisations réseau au démarrage du contexte Spring.
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false

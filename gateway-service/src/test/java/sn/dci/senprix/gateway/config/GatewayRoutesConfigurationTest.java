@@ -12,10 +12,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Vérifie que les 8 routes définies dans application.yml (une par
  * microservice métier) sont correctement chargées par le contexte
  * Spring Cloud Gateway au démarrage, sans dépendre de la disponibilité
- * réelle des microservices ciblés (le chargement des routes ne
- * nécessite aucun appel réseau).
+ * réelle des microservices ciblés : le chargement des routes ne
+ * nécessite aucun appel réseau, y compris avec des URIs lb:// dont la
+ * résolution via l'annuaire n'a lieu qu'au moment d'une requête. Le
+ * client Eureka est donc désactivé — aucun annuaire ne tourne pendant
+ * les tests. Ce test ne déclare pas le profil "test" : il valide bien
+ * les routes réelles de application.yml.
  */
-@SpringBootTest
+@SpringBootTest(properties = {
+        "eureka.client.enabled=false",
+        "eureka.client.register-with-eureka=false",
+        "eureka.client.fetch-registry=false"
+})
 class GatewayRoutesConfigurationTest {
 
     @Autowired

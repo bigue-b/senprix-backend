@@ -1,0 +1,40 @@
+server:
+  port: 8761
+
+spring:
+  application:
+    name: DISCOVERY-SERVICE
+
+eureka:
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+  client:
+    # L'annuaire est autonome (mode standalone) : il ne s'enregistre pas
+    # auprès de lui-même et ne récupère aucun registre distant.
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+  server:
+    # L'auto-préservation empêche Eureka de radier les instances qui ne
+    # renouvellent plus leur bail. Pratique en production, gênante en
+    # développement : un service arrêté resterait affiché comme UP.
+    enable-self-preservation: ${EUREKA_SELF_PRESERVATION:false}
+    eviction-interval-timer-in-ms: 10000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+logging:
+  level:
+    sn.dci.senprix.discovery: INFO
+    com.netflix.eureka: INFO
+    com.netflix.discovery: INFO

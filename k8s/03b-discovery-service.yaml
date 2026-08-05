@@ -1,0 +1,92 @@
+# =====================================================================
+# discovery-service — annuaire de services dynamique (Eureka Server).
+#
+# Déployé AVANT les microservices (préfixe 03b) : chacun d'eux s'y
+# enregistre au démarrage sous son spring.application.name, et la
+# gateway l'interroge pour résoudre ses routes lb://NOM-SERVICE.
+#
+# Une seule réplique : le mode "peer awareness" (plusieurs instances
+# Eureka se répliquant entre elles) n'est pas configuré ici. Si le pod
+# redémarre, les microservices se réenregistrent automatiquement au
+# renouvellement de leur bail — pas d'action manuelle nécessaire.
+#
+# Tableau de bord (depuis le poste de travail) :
+#   kubectl port-forward -n senprix svc/discovery-service 8761:8761
+#   puis http://localhost:8761
+# =====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discovery-service
+  namespace: senprix
+  labels:
+    app: discovery-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: discovery-service
+  template:
+    metadata:
+      labels:
+        app: discovery-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8761"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      containers:
+        - name: discovery-service
+          image: senprix/discovery-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8761
+          env:
+            # Nom sous lequel l'annuaire s'annonce : doit correspondre au
+            # nom du Service Kubernetes ci-dessous pour être résolvable.
+            - name: EUREKA_INSTANCE_HOSTNAME
+              value: "discovery-service"
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8761
+            # 150 x 5s : sur un cluster local, une JVM Spring Boot peut
+            # dépasser les 5 min du seuil précédent et être tuée en boucle.
+            failureThreshold: 150
+            periodSeconds: 5
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8761
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8761
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              # Le démarrage JVM est un pic CPU court mais intense : bridé
+              # à 500m, il dépasse le startupProbe. Ne contraint que les pics.
+              cpu: "2000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: discovery-service
+  namespace: senprix
+spec:
+  selector:
+    app: discovery-service
+  ports:
+    - port: 8761
+      targetPort: 8761

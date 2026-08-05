@@ -30,15 +30,17 @@ spec:
               value: "jdbc:postgresql://postgres:5432/campagne_db"
             - name: KEYCLOAK_JWK_URI
               value: "http://keycloak:8080/realms/senprix/protocol/openid-connect/certs"
-            - name: USER_SERVICE_URL
-              value: "http://user-service:8081"
-            - name: PRODUIT_SERVICE_URL
-              value: "http://produit-service:8082"
+            # Adresse de l'annuaire Eureka : le service s'y enregistre au
+            # démarrage pour être routable par la gateway via lb://NOM-SERVICE.
+            - name: EUREKA_SERVER_URL
+              value: "http://discovery-service:8761/eureka/"
           startupProbe:
             httpGet:
               path: /actuator/health
               port: 8083
-            failureThreshold: 60
+            # 150 x 5s : sur un cluster local, une JVM Spring Boot peut
+            # dépasser les 5 min du seuil précédent et être tuée en boucle.
+            failureThreshold: 150
             periodSeconds: 5
             timeoutSeconds: 5
           readinessProbe:
@@ -61,7 +63,9 @@ spec:
               cpu: "100m"
             limits:
               memory: "512Mi"
-              cpu: "500m"
+              # Le démarrage JVM est un pic CPU court mais intense : bridé
+              # à 500m, il dépasse le startupProbe. Ne contraint que les pics.
+              cpu: "2000m"
 ---
 apiVersion: v1
 kind: Service

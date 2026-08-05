@@ -11,16 +11,34 @@ spring:
         jwt:
           jwk-set-uri: ${KEYCLOAK_JWK_URI:http://localhost:8080/realms/senprix/protocol/openid-connect/certs}
 
-# URLs des microservices distants appelés pour la génération des exports.
+# Microservices distants appelés pour la génération des exports.
+# L'hôte est le NOM du service dans l'annuaire Eureka, pas une adresse :
+# le RestClient @LoadBalanced le résout à chaud vers une instance
+# disponible.
 services:
-  prix-service-url: ${PRIX_SERVICE_URL:http://localhost:8084}
-  produit-service-url: ${PRODUIT_SERVICE_URL:http://localhost:8082}
+  prix-service-url: ${PRIX_SERVICE_URL:http://PRIX-SERVICE}
+  produit-service-url: ${PRODUIT_SERVICE_URL:http://PRODUIT-SERVICE}
 
 springdoc:
   api-docs:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
+
+# Enregistrement auprès de l'annuaire de services (discovery-service).
+# Le service s'y déclare sous son spring.application.name, ce qui permet
+# à la gateway de le router dynamiquement via lb://EXPORT-SERVICE.
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    # Enregistre l'adresse IP plutôt que le nom d'hôte : indispensable en
+    # conteneur (Docker / Kubernetes), où le hostname interne n'est pas
+    # résolvable depuis les autres services.
+    prefer-ip-address: true
 
 management:
   endpoints:
