@@ -32,6 +32,10 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     strategy:
+      # Sans cela, l'échec d'un seul service annule les 9 autres jobs et on
+      # ne voit plus le vrai périmètre du problème (observé sur le run
+      # 31024205674 : 1 échec réel, 9 jobs "cancelled" sans information).
+      fail-fast: false
       matrix:
         service:
           - discovery-service
@@ -63,9 +67,13 @@ jobs:
         working-directory: ${{ matrix.service }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        # Une clé de projet PAR service. Auparavant les 10 jobs poussaient
+        # vers la même clé "senprix", en parallèle : leurs métriques
+        # s'écrasaient mutuellement et SonarCloud refuse les analyses
+        # concurrentes d'un même projet.
         run: >
           mvn -B sonar:sonar
-          -Dsonar.projectKey=senprix
+          -Dsonar.projectKey=senprix-${{ matrix.service }}
           -Dsonar.organization=senprix
           -Dsonar.host.url=https://sonarcloud.io
 
