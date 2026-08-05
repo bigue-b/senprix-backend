@@ -72,13 +72,22 @@ jobs:
         working-directory: ${{ matrix.service }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        # Une clé de projet PAR service. Auparavant les 10 jobs poussaient
-        # vers la même clé "senprix", en parallèle : leurs métriques
-        # s'écrasaient mutuellement et SonarCloud refuse les analyses
-        # concurrentes d'un même projet.
+        # Plugin déclaré en forme COMPLÈTE et à version ÉPINGLÉE.
+        #
+        # `mvn sonar:sonar` reposait sur la résolution du préfixe "sonar",
+        # qui n'appartient pas aux groupes de plugins interrogés par défaut
+        # (org.apache.maven.plugins, org.codehaus.mojo). Résultat :
+        # « No plugin found for prefix 'sonar' » — l'analyse ne démarrait
+        # même pas, d'où un échec identique sur les 10 services. Cela avait
+        # fonctionné en juillet puis cessé sans qu'on touche à la config,
+        # la résolution dépendant de métadonnées externes.
+        #
+        # La version est figée pour que le pipeline soit reproductible :
+        # sans elle, Maven prend la dernière version publiée et le build
+        # peut casser du jour au lendemain.
         run: >
-          mvn -B sonar:sonar
-          -Dsonar.projectKey=senprix-${{ matrix.service }}
+          mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar
+          -Dsonar.projectKey=senprix
           -Dsonar.organization=senprix
           -Dsonar.host.url=https://sonarcloud.io
 
