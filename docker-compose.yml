@@ -80,6 +80,23 @@ services:
       timeout: 5s
       retries: 10
 
+  # -------------------- REDIS (compteurs de rate limiting) --------------------
+  # Utilisé uniquement par gateway-service : le filtre RequestRateLimiter
+  # de Spring Cloud Gateway y tient un "token bucket" par utilisateur,
+  # mis à jour par un script Lua atomique. Le compteur vit dans Redis et
+  # non dans la JVM, ce qui garde la limite globale même si l'on monte
+  # plusieurs instances de la gateway.
+  redis:
+    image: redis:7-alpine
+    container_name: senprix-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # -------------------- DISCOVERY-SERVICE (annuaire Eureka) --------------------
   # Annuaire de services dynamique : chaque microservice s'y enregistre au
   # démarrage sous son spring.application.name, et la gateway l'interroge
@@ -267,9 +284,12 @@ services:
     # de modifier cette configuration.
     environment:
       EUREKA_SERVER_URL: http://discovery-service:8761/eureka/
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     ports:
       - "8090:8090"
     depends_on:
+      - redis
       - discovery-service
       - user-service
       - produit-service

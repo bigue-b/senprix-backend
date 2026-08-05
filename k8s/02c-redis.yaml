@@ -1,0 +1,77 @@
+# =====================================================================
+# Redis — support des compteurs de rate limiting de la Gateway.
+#
+# Le filtre RequestRateLimiter de Spring Cloud Gateway y tient un
+# "token bucket" par clé (utilisateur ou IP), mis à jour par un script
+# Lua atomique. Le compteur vit dans Redis et non dans la JVM : la
+# limite reste donc globale même en montant gateway-service à plusieurs
+# répliques.
+#
+# Aucun volume : ces compteurs sont éphémères par nature (fenêtre d'une
+# seconde). Perdre le contenu au redémarrage du pod n'a aucun impact,
+# la limite se reconstitue à la requête suivante.
+# =====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: senprix
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 6379
+          # Sondes TCP plutôt que `redis-cli ping` : pas de processus à
+          # lancer à chaque contrôle, et rien à casser côté conteneur
+          # (voir la mésaventure documentée sur RabbitMQ dans 02b).
+          startupProbe:
+            tcpSocket:
+              port: 6379
+            failureThreshold: 30
+            periodSeconds: 5
+            timeoutSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 20
+            timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: senprix
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379

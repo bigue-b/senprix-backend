@@ -53,6 +53,16 @@
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
+        <!-- Rate limiting : le filtre RequestRateLimiter de Spring Cloud
+             Gateway s'appuie sur un compteur "token bucket" tenu dans Redis
+             (script Lua atomique). Redis est indispensable ici — c'est ce
+             qui permet à la limite d'être partagée entre toutes les
+             instances de la gateway plutôt que locale à chaque JVM. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>

@@ -32,6 +32,12 @@ spec:
           env:
             - name: EUREKA_SERVER_URL
               value: "http://discovery-service:8761/eureka/"
+            # Redis porte les compteurs du RequestRateLimiter (voir
+            # 02c-redis.yaml et RateLimitConfig côté gateway).
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
           startupProbe:
             httpGet:
               path: /actuator/health/readiness

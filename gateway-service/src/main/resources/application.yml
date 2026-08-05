@@ -5,6 +5,15 @@ spring:
   application:
     name: GATEWAY-SERVICE
 
+  # Redis porte les compteurs du RequestRateLimiter (token bucket mis à
+  # jour par un script Lua atomique). Le compteur étant partagé, la limite
+  # reste globale même avec plusieurs instances de la gateway.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+
   cloud:
     gateway:
       # CORS global : autorise le frontend (quel que soit son origine
@@ -30,10 +39,19 @@ spring:
       # de charge entre instances est automatique.
       routes:
         # ===================== USER-SERVICE =====================
+        # Limité : la création et la modification de comptes passent par
+        # ici, et chaque appel se répercute sur l'API admin de Keycloak.
         - id: user-service
           uri: lb://USER-SERVICE
           predicates:
             - Path=/api/admin/utilisateurs/**,/api/public/utilisateurs/**,/api/agent/moi
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@utilisateurKeyResolver}"
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
 
         # ===================== PRODUIT-SERVICE =====================
         - id: produit-service
@@ -48,10 +66,23 @@ spring:
             - Path=/api/admin/campagnes/**,/api/public/campagnes/**
 
         # ===================== PRIX-SERVICE =====================
+        # Limité : /api/agent/prix est l'endpoint le plus sollicité de la
+        # plateforme (saisie terrain des relevés) et chaque écriture peut
+        # déclencher une publication RabbitMQ vers alerte-service.
         - id: prix-service
           uri: lb://PRIX-SERVICE
           predicates:
             - Path=/api/agent/prix/**,/api/public/prix/**,/api/admin/prix/**,/api/admin/audit/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@utilisateurKeyResolver}"
+                # 20 req/s par utilisateur. burstCapacity au même niveau
+                # que replenishRate donne un plafond strict ; l'augmenter
+                # (40 par exemple) tolérerait des pics courts.
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
 
         # ===================== ALERTE-SERVICE =====================
         - id: alerte-service
@@ -72,10 +103,20 @@ spring:
             - Path=/api/admin/rapports/**,/api/public/rapports/**
 
         # ===================== EXPORT-SERVICE =====================
+        # Limité : la génération d'un export CSV/Excel interroge
+        # prix-service et produit-service puis construit le fichier en
+        # mémoire — c'est de loin l'appel le plus coûteux de la stack.
         - id: export-service
           uri: lb://EXPORT-SERVICE
           predicates:
             - Path=/api/admin/exports/**,/api/public/exports/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@utilisateurKeyResolver}"
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
 
 # La gateway est à la fois cliente de l'annuaire (elle y lit le registre
 # pour résoudre les URIs lb://) et enregistrée dedans, ce qui la rend

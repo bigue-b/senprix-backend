@@ -339,3 +339,154 @@ de load balancer autre que la présence transitive de
 `spring-cloud-starter-loadbalancer`. Monter une réplique supplémentaire
 ne demande désormais qu'un changement de `replicas` — aucune URL, aucun
 port et aucun manifeste de Gateway à retoucher.
+
+---
+
+# Test end-to-end : rate limiting sur la Gateway (Redis)
+
+Date : 2026-08-05
+Environnement : cluster Kubernetes local Docker Desktop, namespace
+`senprix`, 10 microservices + postgres + rabbitmq + **redis**
+
+## Contexte
+
+Protection de la Gateway contre les rafales d'appels, en s'appuyant sur
+le filtre `RequestRateLimiter` **natif** de Spring Cloud Gateway.
+
+Choix de l'implémentation : Redis, et non Resilience4j. Resilience4j
+apporte du *circuit breaking* (couper les appels vers un service en
+panne), pas de la limitation de débit côté Gateway — la seule
+implémentation de `RateLimiter` fournie en standard par Spring Cloud
+Gateway est `RedisRateLimiter`. Redis est par ailleurs le composant le
+plus léger à ajouter au cluster (image `redis:7-alpine`, 64 Mi de
+`requests`, sans volume).
+
+L'intérêt d'un compteur externe plutôt qu'en mémoire : il est **partagé**
+entre toutes les instances de la Gateway. Monter `gateway-service` à 2
+répliques ne double donc pas la limite réelle.
+
+### Configuration retenue
+
+`gateway-service/src/main/resources/application.yml` — 20 requêtes par
+seconde et par utilisateur, sur trois routes choisies pour leur coût ou
+leur sensibilité :
+
+| Route | Pourquoi elle est limitée |
+|---|---|
+| `prix-service` (`/api/agent/prix/**`, …) | endpoint le plus sollicité — saisie terrain, et chaque écriture peut publier un message RabbitMQ vers `alerte-service` |
+| `export-service` (`/api/*/exports/**`) | appel le plus coûteux : interroge `prix-service` et `produit-service` puis construit le fichier en mémoire |
+| `user-service` (`/api/admin/utilisateurs/**`, …) | chaque appel se répercute sur l'API admin de Keycloak |
+
+```yaml
+filters:
+  - name: RequestRateLimiter
+    args:
+      key-resolver: "#{@utilisateurKeyResolver}"
+      redis-rate-limiter.replenishRate: 20
+      redis-rate-limiter.burstCapacity: 20
+      redis-rate-limiter.requestedTokens: 1
+```
+
+`burstCapacity` est volontairement aligné sur `replenishRate` pour
+obtenir un plafond strict ; le porter à 40 tolérerait des pics courts.
+
+### Clé de comptage
+
+`RateLimitConfig.utilisateurKeyResolver()` compte **par utilisateur**
+(revendication `sub` du jeton) et retombe sur l'adresse IP en l'absence
+de jeton — sans ce repli, tout le trafic anonyme partagerait un unique
+compteur et un seul appelant bloquerait les autres.
+
+La signature du jeton n'est pas vérifiée dans la Gateway : elle n'est pas
+la frontière de confiance ici, chaque microservice validant le jeton
+auprès de Keycloak. La revendication ne sert qu'à répartir des compteurs,
+jamais à accorder un accès — un jeton falsifié n'obtient donc qu'un
+compteur à lui, soit exactement l'effet d'un appel anonyme depuis une
+autre IP. Le test 3 ci-dessous le montre au passage.
+
+## 1. Résultat observé — la limite est appliquée
+
+60 requêtes simultanées (`curl --parallel`) sur une route limitée :
+
+```bash
+kubectl port-forward -n senprix svc/gateway-service 8090:8090
+
+URLS=""; for i in $(seq 1 60); do URLS="$URLS http://localhost:8090/api/public/prix"; done
+curl -s --no-progress-meter --parallel --parallel-immediate --parallel-max 60 \
+     -o /dev/null -w "CODE=%{http_code}\n" $URLS | sort | uniq -c
+```
+
+```
+     20 CODE=200
+     40 CODE=429
+```
+
+**Exactement 20 passent, 40 sont rejetées** — le plafond correspond au
+`burstCapacity` configuré, au jeton près.
+
+En-têtes renvoyés sur une requête rejetée :
+
+```
+HTTP/1.1 429 Too Many Requests
+X-RateLimit-Remaining: 0
+X-RateLimit-Requested-Tokens: 1
+X-RateLimit-Burst-Capacity: 20
+X-RateLimit-Replenish-Rate: 20
+```
+
+## 2. Résultat observé — une route non limitée n'est pas affectée
+
+Même rafale de 60 requêtes sur `/api/public/produits`, route sans filtre :
+
+```
+     60 CODE=200
+```
+
+Aucun rejet : la limitation est bien ciblée sur les routes choisies et
+n'est pas un effet global de la Gateway.
+
+## 3. Résultat observé — les compteurs sont séparés par utilisateur
+
+30 requêtes avec un jeton portant `"sub":"agent-A"`, puis immédiatement
+30 requêtes avec `"sub":"agent-B"` :
+
+```
+--- agent-A ---            --- agent-B ---
+     20 CODE=401                30 CODE=401
+     10 CODE=429
+```
+
+Deux enseignements :
+
+- **agent-A est bloqué (10 rejets), agent-B ne l'est pas du tout** alors
+  que sa rafale suit immédiatement. Avec un compteur partagé, agent-B
+  aurait été rejeté d'entrée : les buckets sont bien distincts par
+  utilisateur.
+- Les `401` viennent de `prix-service`, qui refuse ces jetons fabriqués
+  pour le test. C'est précisément la preuve que ces requêtes **ont
+  traversé le rate limiter** et atteint le microservice : la Gateway ne
+  valide pas les jetons, chaque service s'en charge.
+
+## 4. Résultat observé — la limite se reconstitue
+
+Après 3 secondes sans trafic :
+
+```
+  requête 1 -> HTTP 200
+  requête 2 -> HTTP 200
+  requête 3 -> HTTP 200
+```
+
+Le bucket se remplit bien à `replenishRate` jetons par seconde : la
+limitation est temporaire, pas un blocage persistant.
+
+## Conclusion
+
+Le rate limiting est **réellement appliqué**, pas seulement configuré :
+20 requêtes admises et 40 rejetées en HTTP 429 sur une rafale de 60,
+avec les en-têtes `X-RateLimit-*` correspondants. Il est ciblé (une route
+sans filtre reste libre), individualisé (un utilisateur saturé n'affecte
+pas les autres) et transitoire (reconstitution en quelques secondes).
+
+Le compteur vivant dans Redis et non dans la JVM, la limite restera
+globale le jour où `gateway-service` passera à plusieurs répliques.
