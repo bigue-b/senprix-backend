@@ -25,6 +25,11 @@ on:
       - "rapport-service/**"
       - "export-service/**"
       - "gateway-service/**"
+      # Sans cette entrée, modifier le pipeline lui-même ne le déclenche
+      # pas : le filtre paths ne correspond à rien et le push passe en
+      # silence, sans aucun run. On ne peut alors pas valider un
+      # changement de CI autrement qu'en touchant un service au hasard.
+      - ".github/workflows/**"
   pull_request:
     branches: [main]
 
